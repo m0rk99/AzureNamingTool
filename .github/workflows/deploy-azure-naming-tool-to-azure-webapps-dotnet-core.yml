@@ -1,4 +1,4 @@
-name: Azure Naming Tool - Build and deploy to an Azure Web App
+name: Azure Naming Tool - Build and deploy to an Azure Web App 
 
 env:
   DOTNET_VERSION: '8.0.x'
