@@ -21,8 +21,8 @@ jobs:
   check-secrets:
     runs-on: ubuntu-latest
     outputs:
-      ok: ${{ steps.gate.outputs.ready }}
-      webapp: ${{ steps.resolve.outputs.webapp }}
+      ok: '${{ steps.gate.outputs.ready }}'
+      webapp: '${{ steps.resolve.outputs.webapp }}'
     steps:
       - uses: actions/checkout@v4
 
@@ -96,16 +96,25 @@ jobs:
           name: ${{ env.ARTIFACT_NAME }}
           path: ./deploy-package
 
-      # Login using separate secrets (no JSON secret required)
+      # Build creds JSON safely and expose as a step output
+      - id: mkcreds
+        name: Build Azure creds JSON
+        shell: bash
+        run: |
+          CREDS_JSON=$(cat <<'JSON'
+{"clientId":"__CID__","clientSecret":"__CSEC__","tenantId":"__TID__","subscriptionId":"__SID__"}
+JSON
+)
+          CREDS_JSON="${CREDS_JSON/__CID__/${{ secrets.AZ_CLIENT_ID }}}"
+          CREDS_JSON="${CREDS_JSON/__CSEC__/${{ secrets.AZ_CLIENT_SECRET }}}"
+          CREDS_JSON="${CREDS_JSON/__TID__/${{ secrets.AZ_TENANT_ID }}}"
+          CREDS_JSON="${CREDS_JSON/__SID__/${{ secrets.AZ_SUBSCRIPTION_ID }}}"
+          echo "creds=$CREDS_JSON" >> "$GITHUB_OUTPUT"
+
       - name: Azure login (service principal)
         uses: azure/login@v1
         with:
-          creds: ${{ toJson({
-            'clientId': secrets.AZ_CLIENT_ID,
-            'clientSecret': secrets.AZ_CLIENT_SECRET,
-            'tenantId': secrets.AZ_TENANT_ID,
-            'subscriptionId': secrets.AZ_SUBSCRIPTION_ID
-          }) }}
+          creds: ${{ steps.mkcreds.outputs.creds }}
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
