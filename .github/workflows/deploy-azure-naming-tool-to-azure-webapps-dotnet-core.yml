@@ -1,8 +1,8 @@
-name: Azure Naming Tool - Build and deploy to an Azure Web App 
+name: Azure Naming Tool - Build and deploy to an Azure Web App
 
 env:
-  DOTNET_VERSION: '8.0.x'      # .NET LTS
-  ARTIFACT_NAME: '.net-app'    # must match build upload & deploy download
+  DOTNET_VERSION: '8.0.x'
+  ARTIFACT_NAME: '.net-app'
 
 on:
   push:
@@ -22,23 +22,36 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       ok: ${{ steps.gate.outputs.ready }}
+      webapp: ${{ steps.resolve.outputs.webapp }}
     steps:
       - uses: actions/checkout@v4
+
+      - id: resolve
+        name: Resolve webapp name
+        run: |
+          WEBAPP="${{ secrets.AZURE_WEBAPP_NAME }}"
+          echo "webapp=$WEBAPP" >> "$GITHUB_OUTPUT"
 
       - name: Debug (safe)
         run: |
           echo "AZURE_WEBAPP_NAME set? ${{ secrets.AZURE_WEBAPP_NAME != '' }}"
-          echo -n "AZURE_CREDENTIALS length: "
-          echo '${{ secrets.AZURE_CREDENTIALS }}' | wc -c
+          echo "AZ_CLIENT_ID set?      ${{ secrets.AZ_CLIENT_ID != '' }}"
+          echo "AZ_TENANT_ID set?      ${{ secrets.AZ_TENANT_ID != '' }}"
+          echo "AZ_SUBSCRIPTION_ID set? ${{ secrets.AZ_SUBSCRIPTION_ID != '' }}"
+          echo "AZ_CLIENT_SECRET length: $(echo '${{ secrets.AZ_CLIENT_SECRET }}' | wc -c)"
 
       - id: gate
         name: Gate on required secrets
         run: |
-          if [ -n "${{ secrets.AZURE_WEBAPP_NAME }}" ] && [ -n "${{ secrets.AZURE_CREDENTIALS }}" ]; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=false" >> "$GITHUB_OUTPUT"
+          READY="false"
+          if [ -n "${{ secrets.AZURE_WEBAPP_NAME }}" ] \
+             && [ -n "${{ secrets.AZ_CLIENT_ID }}" ] \
+             && [ -n "${{ secrets.AZ_CLIENT_SECRET }}" ] \
+             && [ -n "${{ secrets.AZ_TENANT_ID }}" ] \
+             && [ -n "${{ secrets.AZ_SUBSCRIPTION_ID }}" ]; then
+            READY="true"
           fi
+          echo "ready=$READY" >> "$GITHUB_OUTPUT"
 
   build:
     runs-on: ubuntu-latest
@@ -83,13 +96,19 @@ jobs:
           name: ${{ env.ARTIFACT_NAME }}
           path: ./deploy-package
 
+      # Login using separate secrets (no JSON secret required)
       - name: Azure login (service principal)
         uses: azure/login@v1
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          creds: ${{ toJson({
+            'clientId': secrets.AZ_CLIENT_ID,
+            'clientSecret': secrets.AZ_CLIENT_SECRET,
+            'tenantId': secrets.AZ_TENANT_ID,
+            'subscriptionId': secrets.AZ_SUBSCRIPTION_ID
+          }) }}
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
-          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+          app-name: ${{ needs.check-secrets.outputs.webapp }}
           package: ./deploy-package
