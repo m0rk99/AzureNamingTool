@@ -1,7 +1,7 @@
 name: Azure Naming Tool - Build and deploy to an Azure Web App
 
 env:
-  AZURE_WEBAPP_PACKAGE_PATH: '.'   # repo root by default
+  AZURE_WEBAPP_PACKAGE_PATH: '.'
   DOTNET_VERSION: '8.0.x'
 
 on:
@@ -49,16 +49,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
-      - name: dotnet build
+      - name: Build
         run: dotnet build --configuration Release
 
-      - name: dotnet publish
+      - name: Publish
         run: dotnet publish -c Release -o ${{env.DOTNET_ROOT}}/myapp
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dotnet-app
+          name: .net-app
           path: ${{env.DOTNET_ROOT}}/myapp
 
   deploy:
@@ -72,10 +72,10 @@ jobs:
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: dotnet-app
+          name: .net-app
           path: ./deploy-package
 
-      - name: Azure login (service principal)
+      - name: Azure login
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
