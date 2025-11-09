@@ -1,14 +1,15 @@
 name: Azure Naming Tool - Build and deploy to an Azure Web App
 
 env:
-  AZURE_WEBAPP_PACKAGE_PATH: '.'
-  DOTNET_VERSION: '8.0.x'
+  DOTNET_VERSION: '8.0.x'     # .NET LTS
+  ARTIFACT_NAME: '.net-app'   # keep in sync with build/upload
 
 on:
   push:
     branches: [ "main" ]
   workflow_dispatch:
 
+# Build steps run from the src folder (project lives here)
 defaults:
   run:
     working-directory: src
@@ -20,15 +21,25 @@ jobs:
   check-secrets:
     runs-on: ubuntu-latest
     outputs:
-      ok: ${{ steps.ok.outputs.ready }}
+      ok: ${{ steps.gate.outputs.ready }}
     steps:
       - uses: actions/checkout@v4
-      - id: ok
-        env:
-          NAME: ${{ secrets.AZURE_WEBAPP_NAME }}
-          CREDS: ${{ secrets.AZURE_CREDENTIALS }}
-        if: (env.NAME != '' && env.CREDS != '')
-        run: echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: Debug (safe)
+      run: |
+        echo "AZURE_WEBAPP_NAME: '${{ secrets.AZURE_WEBAPP_NAME }}'"
+        echo -n "AZURE_CREDENTIALS length: "
+        echo '${{ secrets.AZURE_CREDENTIALS }}' | wc -c
+
+      - id: gate
+        name: Gate on required secrets
+        shell: bash
+        run: |
+          READY="false"
+          if [ -n "${{ secrets.AZURE_WEBAPP_NAME }}" ] && [ -n "${{ secrets.AZURE_CREDENTIALS }}" ]; then
+            READY="true"
+          fi
+          echo "ready=$READY" >> "$GITHUB_OUTPUT"
 
   build:
     runs-on: ubuntu-latest
@@ -36,6 +47,7 @@ jobs:
     if: needs.check-secrets.outputs.ok == 'true'
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -58,24 +70,22 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: .net-app
-          path: ${{env.DOTNET_ROOT}}/myapp
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.DOTNET_ROOT }}/myapp
 
   deploy:
     runs-on: ubuntu-latest
     needs: [build, check-secrets]
     if: needs.check-secrets.outputs.ok == 'true'
-    environment:
-      name: Development
-      url: ${{ steps.deploy.outputs.webapp-url }}
+    # no defaults. keep working-directory as repo root for deploy paths
     steps:
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: .net-app
+          name: ${{ env.ARTIFACT_NAME }}
           path: ./deploy-package
 
-      - name: Azure login
+      - name: Azure login (service principal)
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
