@@ -1,4 +1,4 @@
-name: Azure Naming Tool - Build and deploy to an Azure Web App 
+name: Azure Naming Tool - Build and deploy to an Azure Web App
 
 env:
   DOTNET_VERSION: '8.0.x'
@@ -29,9 +29,9 @@ jobs:
 
       - name: Debug (safe)
         run: |
-          echo "AZURE_WEBAPP_NAME set? ${{ secrets.AZURE_WEBAPP_NAME != '' }}"
-          echo "AZ_CLIENT_ID set?      ${{ secrets.AZ_CLIENT_ID != '' }}"
-          echo "AZ_TENANT_ID set?      ${{ secrets.AZ_TENANT_ID != '' }}"
+          echo "AZURE_WEBAPP_NAME set?  ${{ secrets.AZURE_WEBAPP_NAME != '' }}"
+          echo "AZ_CLIENT_ID set?       ${{ secrets.AZ_CLIENT_ID != '' }}"
+          echo "AZ_TENANT_ID set?       ${{ secrets.AZ_TENANT_ID != '' }}"
           echo "AZ_SUBSCRIPTION_ID set? ${{ secrets.AZ_SUBSCRIPTION_ID != '' }}"
           echo "AZ_CLIENT_SECRET length: $(echo '${{ secrets.AZ_CLIENT_SECRET }}' | wc -c)"
 
@@ -94,25 +94,13 @@ jobs:
           name: ${{ env.ARTIFACT_NAME }}
           path: ./deploy-package
 
-      # Build creds JSON as a step output (YAML-safe)
-      - id: mkcreds
-        name: Build Azure creds JSON
-        shell: bash
-        run: |
-          CREDS_JSON=$(cat <<'JSON'
-{"clientId":"__CID__","clientSecret":"__CSEC__","tenantId":"__TID__","subscriptionId":"__SID__"}
-JSON
-)
-          CREDS_JSON="${CREDS_JSON/__CID__/${{ secrets.AZ_CLIENT_ID }}}"
-          CREDS_JSON="${CREDS_JSON/__CSEC__/${{ secrets.AZ_CLIENT_SECRET }}}"
-          CREDS_JSON="${CREDS_JSON/__TID__/${{ secrets.AZ_TENANT_ID }}}"
-          CREDS_JSON="${CREDS_JSON/__SID__/${{ secrets.AZ_SUBSCRIPTION_ID }}}"
-          echo "creds=$CREDS_JSON" >> "$GITHUB_OUTPUT"
-
       - name: Azure login (service principal)
         uses: azure/login@v1
         with:
-          creds: ${{ steps.mkcreds.outputs.creds }}
+          client-id: ${{ secrets.AZ_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZ_TENANT_ID }}
+          subscription-id: ${{ secrets.AZ_SUBSCRIPTION_ID }}
+          client-secret: ${{ secrets.AZ_CLIENT_SECRET }}
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
