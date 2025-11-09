@@ -1,17 +1,19 @@
 name: Azure Naming Tool - Build and deploy to an Azure Web App
 
-env:
-  DOTNET_VERSION: '8.0.x'
-  ARTIFACT_NAME: '.net-app'
-
 on:
   push:
     branches:
       - main
   workflow_dispatch:
 
+# OIDC token permission for azure/login
 permissions:
   contents: read
+  id-token: write
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  ARTIFACT_NAME: '.net-app'
 
 jobs:
   check-secrets:
@@ -30,20 +32,18 @@ jobs:
       - name: Debug (safe)
         run: |
           echo "AZURE_WEBAPP_NAME set?  ${{ secrets.AZURE_WEBAPP_NAME != '' }}"
-          echo "AZ_CLIENT_ID set?       ${{ secrets.AZ_CLIENT_ID != '' }}"
           echo "AZ_TENANT_ID set?       ${{ secrets.AZ_TENANT_ID != '' }}"
           echo "AZ_SUBSCRIPTION_ID set? ${{ secrets.AZ_SUBSCRIPTION_ID != '' }}"
-          echo "AZ_CLIENT_SECRET length: $(echo '${{ secrets.AZ_CLIENT_SECRET }}' | wc -c)"
+          echo "AZ_CLIENT_ID set?       ${{ secrets.AZ_CLIENT_ID != '' }}"
 
       - id: gate
         name: Gate on required secrets
         run: |
           READY="false"
           if [ -n "${{ secrets.AZURE_WEBAPP_NAME }}" ] \
-             && [ -n "${{ secrets.AZ_CLIENT_ID }}" ] \
-             && [ -n "${{ secrets.AZ_CLIENT_SECRET }}" ] \
              && [ -n "${{ secrets.AZ_TENANT_ID }}" ] \
-             && [ -n "${{ secrets.AZ_SUBSCRIPTION_ID }}" ]; then
+             && [ -n "${{ secrets.AZ_SUBSCRIPTION_ID }}" ] \
+             && [ -n "${{ secrets.AZ_CLIENT_ID }}" ]; then
             READY="true"
           fi
           echo "ready=$READY" >> "$GITHUB_OUTPUT"
@@ -94,13 +94,12 @@ jobs:
           name: ${{ env.ARTIFACT_NAME }}
           path: ./deploy-package
 
-      - name: Azure login (service principal)
+      - name: Azure login (OIDC)
         uses: azure/login@v1
         with:
-          client-id: ${{ secrets.AZ_CLIENT_ID }}
           tenant-id: ${{ secrets.AZ_TENANT_ID }}
           subscription-id: ${{ secrets.AZ_SUBSCRIPTION_ID }}
-          client-secret: ${{ secrets.AZ_CLIENT_SECRET }}
+          client-id: ${{ secrets.AZ_CLIENT_ID }}
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
